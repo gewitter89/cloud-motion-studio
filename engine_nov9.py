@@ -261,7 +261,8 @@ def render_nov9_scene_2(t, dur):
     # Crumbling concrete rubble at base
     for b in range(16):
         bx = wall_cx - 180 + b * 24
-        by = HEIGHT - 220 - int(math.sin(b * 0.4) * 45) - (b % 3) * 12
+        rubble_h = max(6, int(abs(math.sin(b * 0.4)) * 45) + (b % 3) * 12)
+        by = HEIGHT - 220 - rubble_h
         bw = 28 + (b % 4) * 8
         draw.rectangle([bx, by, bx + bw, HEIGHT - 220], fill=(100, 116, 139), outline=(51, 65, 85), width=2)
         
