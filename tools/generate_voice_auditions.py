@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate 3 calibrated male voice auditions (A/B/C) on the exact same Scene 2 paragraph.
-Mastered via FFmpeg with studio EQ & two-pass loudnorm to -16 LUFS, True Peak <= -1.5 dBTP.
+Mastered via FFmpeg with studio EQ, calibrated tempo & two-pass loudnorm to -16 LUFS, True Peak <= -1.5 dBTP.
+Dispatches directly to Telegram chat and Web URL.
 """
 
 import os
@@ -10,56 +11,34 @@ import json
 import subprocess
 import httpx
 
-TEXT = (
-    "Девятое ноября 1989 года вошло в историю как день, когда пала Берлинская стена. "
-    "В одну ночь то, что десятилетиями разделяло семьи и держало мир в напряжении, "
-    "рассыпалось в пыль перед напором тысяч безоружных людей. "
-    "Они поднялись на бетонные плиты не ради разрушения, а ради свободы, "
-    "доказав всему миру: ни одна граница не устоит перед единством и верой."
-)
+OUT_DIR = os.path.abspath("production/auditions")
+os.makedirs(OUT_DIR, exist_ok=True)
+WEB_DIR = "/var/www/signals"
+
+SRC_AUDIO = "/tmp/test_ostap_full.mp3"
 
 OPTIONS = {
     "A": {
         "title": "Вариант A: Документальный академический",
-        "desc": "Сдержанный, четкий тон хроники, нейтральный темп (100%), ровная студийная АЧХ",
-        "voice": "ru-RU-DmitryNeural",
-        "rate": None,
-        "eq_filter": "highpass=f=60,lowpass=f=12000"
+        "desc": "Сдержанный, четкий тон хроники, естественный темп (100%), чистая студийная АЧХ",
+        "filter": "highpass=f=65,lowpass=f=12000"
     },
     "B": {
         "title": "Вариант B: Глубокий драматический нарратор",
-        "desc": "Замедленный темп (-5%), теплый глубокий тембр (+2.8dB на 120Hz), весомость и паузы",
-        "voice": "ru-RU-DmitryNeural",
-        "rate": "-5%",
-        "eq_filter": "highpass=f=60,equalizer=f=120:width_type=o:width=1.2:g=2.8,equalizer=f=3500:width_type=o:width=1:g=-1.5,lowpass=f=11000"
+        "desc": "Замедленный темп (95%), теплый глубокий тембр (low-end +3dB на 120Hz), весомость и паузы",
+        "filter": "atempo=0.95,highpass=f=60,equalizer=f=120:width_type=o:width=1.2:g=3.0,equalizer=f=3500:width_type=o:width=1:g=-1.5,lowpass=f=11000"
     },
     "C": {
-        "title": "Вариант C: Динамичный эксплейнер",
-        "desc": "Энергичная подача (+4% к темпу), четкий аналитический фокус (+2.2dB на 2.8kHz)",
-        "voice": "ru-RU-DmitryNeural",
-        "rate": "+4%",
-        "eq_filter": "highpass=f=75,equalizer=f=2800:width_type=o:width=1:g=2.2,lowpass=f=13000"
+        "title": "Вариант C: Динамичный современный эксплейнер",
+        "desc": "Энергичная подача (+5% к темпу), четкий аналитический фокус на дикции (+2.5dB на 2.8kHz)",
+        "filter": "atempo=1.05,highpass=f=75,equalizer=f=2800:width_type=o:width=1:g=2.5,lowpass=f=13000"
     }
 }
 
-def generate_raw_tts(text: str, out_raw: str, voice: str, rate: str | None):
-    edge_bin = "/opt/agent-bot/venv/bin/edge-tts"
-    if not os.path.exists(edge_bin):
-        edge_bin = "edge-tts"
-    
-    cmd = [edge_bin, "--text", text, "--write-media", out_raw, "--voice", voice]
-    if rate:
-        cmd.extend(["--rate", rate])
-    
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode != 0:
-        raise RuntimeError(f"edge-tts failed: {res.stderr}")
-
-def master_audio(raw_path: str, norm_path: str, eq_filter: str):
-    # Two-pass loudnorm to guarantee exact -16 LUFS and True Peak <= -1.5 dBTP
-    combined_filter = f"{eq_filter},loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json"
+def master_audio(src_path: str, norm_path: str, dsp_filter: str):
+    combined_filter = f"{dsp_filter},loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json"
     cmd_measure = [
-        "ffmpeg", "-y", "-i", raw_path,
+        "ffmpeg", "-y", "-i", src_path,
         "-af", combined_filter,
         "-f", "null", "-"
     ]
@@ -67,13 +46,13 @@ def master_audio(raw_path: str, norm_path: str, eq_filter: str):
     
     lines = p.stderr.splitlines()
     json_lines = []
-    recording = False
+    rec = False
     for line in lines:
         if line.strip().startswith("{"):
-            recording = True
-        if recording:
+            rec = True
+        if rec:
             json_lines.append(line)
-        if recording and line.strip().startswith("}"):
+        if rec and line.strip().startswith("}"):
             break
             
     stats = {}
@@ -85,7 +64,7 @@ def master_audio(raw_path: str, norm_path: str, eq_filter: str):
 
     if stats and "input_i" in stats:
         final_af = (
-            f"{eq_filter},"
+            f"{dsp_filter},"
             f"loudnorm=I=-16:TP=-1.5:LRA=11:"
             f"measured_I={stats.get('input_i')}:"
             f"measured_TP={stats.get('input_tp')}:"
@@ -94,10 +73,10 @@ def master_audio(raw_path: str, norm_path: str, eq_filter: str):
             f"offset={stats.get('target_offset')}:linear=true"
         )
     else:
-        final_af = f"{eq_filter},loudnorm=I=-16:TP=-1.5:LRA=11"
+        final_af = f"{dsp_filter},loudnorm=I=-16:TP=-1.5:LRA=11"
 
     cmd_apply = [
-        "ffmpeg", "-y", "-i", raw_path,
+        "ffmpeg", "-y", "-i", src_path,
         "-af", final_af,
         "-ar", "44100",
         "-b:a", "192k",
@@ -140,7 +119,7 @@ def send_telegram_audio(filepath: str, title: str, caption: str):
         with open(filepath, "rb") as f:
             resp = httpx.post(
                 url,
-                data={"chat_id": chat_id, "caption": caption, "title": title, "performer": "Диктор A/B/C", "parse_mode": "HTML"},
+                data={"chat_id": chat_id, "caption": caption, "title": title, "performer": "Дикторский кастинг (9 Ноября)", "parse_mode": "HTML"},
                 files={"audio": (os.path.basename(filepath), f, "audio/mpeg")},
                 timeout=60
             )
@@ -149,18 +128,23 @@ def send_telegram_audio(filepath: str, title: str, caption: str):
         print(f"Telegram error: {e}")
 
 def main():
-    out_dir = os.path.abspath("production/auditions")
-    os.makedirs(out_dir, exist_ok=True)
-    web_dir = "/var/www/signals"
-    
+    if not os.path.exists(SRC_AUDIO) or os.path.getsize(SRC_AUDIO) < 1000:
+        print("Source audio not found, synthesizing...")
+        text = (
+            "Девятое ноября 1989 года вошло в историю как день, когда пала Берлинская стена. "
+            "В одну ночь то, что десятилетиями разделяло семьи и держало мир в напряжении, "
+            "рассыпалось в пыль перед напором тысяч безоружных людей. "
+            "Они поднялись на бетонные плиты не ради разрушения, а ради свободы, "
+            "доказав всему миру: ни одна граница не устоит перед единством и верой."
+        )
+        cmd = ["/opt/agent-bot/venv/bin/edge-tts", "--text", text, "--write-media", SRC_AUDIO, "--voice", "uk-UA-OstapNeural"]
+        subprocess.run(cmd, check=True)
+
     results = {}
     for opt_id, cfg in OPTIONS.items():
-        print(f"\n=== Generating Option {opt_id}: {cfg['title']} ===")
-        raw_path = os.path.join(out_dir, f"voice_{opt_id}_raw.mp3")
-        norm_path = os.path.join(out_dir, f"voice_audition_{opt_id}.mp3")
-        
-        generate_raw_tts(TEXT, raw_path, cfg["voice"], cfg["rate"])
-        stats = master_audio(raw_path, norm_path, cfg["eq_filter"])
+        print(f"\n=== Mastering Option {opt_id}: {cfg['title']} ===")
+        norm_path = os.path.join(OUT_DIR, f"voice_audition_{opt_id}.mp3")
+        stats = master_audio(SRC_AUDIO, norm_path, cfg["filter"])
         
         # probe duration
         dur_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", norm_path]
@@ -168,15 +152,13 @@ def main():
         duration = float(dur_out) if dur_out else 0.0
 
         web_url = f"https://signals-sacramento-enquiry-looks.trycloudflare.com/audition_{opt_id}.mp3"
-        if os.path.exists(web_dir):
+        if os.path.exists(WEB_DIR):
             import shutil
-            shutil.copy(norm_path, os.path.join(web_dir, f"audition_{opt_id}.mp3"))
+            shutil.copy(norm_path, os.path.join(WEB_DIR, f"audition_{opt_id}.mp3"))
 
         results[opt_id] = {
             "title": cfg["title"],
             "desc": cfg["desc"],
-            "voice": cfg["voice"],
-            "rate": cfg["rate"] or "+0%",
             "duration": round(duration, 2),
             "file": norm_path,
             "web_url": web_url,
@@ -189,15 +171,15 @@ def main():
             f"🎙 <b>{cfg['title']}</b>\n"
             f"ℹ️ {cfg['desc']}\n"
             f"⏱ Хронометраж: {duration:.1f} сек\n"
-            f"🎚 Громкость: {stats.get('input_i')} LUFS (Цель: -16.0)\n"
-            f"🌐 Ссылка: {web_url}"
+            f"🎚 Громкость: {stats.get('input_i')} LUFS (Целевая: -16.0, True Peak: {stats.get('input_tp')} dBTP)\n"
+            f"🌐 Слушать онлайн: {web_url}"
         )
         send_telegram_audio(norm_path, f"Прослушивание {opt_id}", caption)
 
-    report_path = os.path.join(out_dir, "auditions_report.json")
+    report_path = os.path.join(OUT_DIR, "auditions_report.json")
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-    print(f"\nAll auditions generated and dispatched. Report saved to {report_path}")
+    print(f"\nAll auditions mastered and dispatched. Report saved to {report_path}")
 
 if __name__ == "__main__":
     main()
