@@ -8,11 +8,10 @@ import os
 import sys
 import json
 import subprocess
-import asyncio
 import httpx
 
 TEXT = (
-    "9 ноября 1989 года вошло в историю как день, когда пала Берлинская стена. "
+    "Девятое ноября 1989 года вошло в историю как день, когда пала Берлинская стена. "
     "В одну ночь то, что десятилетиями разделяло семьи и держало мир в напряжении, "
     "рассыпалось в пыль перед напором тысяч безоружных людей. "
     "Они поднялись на бетонные плиты не ради разрушения, а ради свободы, "
@@ -24,29 +23,37 @@ OPTIONS = {
         "title": "Вариант A: Документальный академический",
         "desc": "Сдержанный, четкий тон хроники, нейтральный темп (100%), ровная студийная АЧХ",
         "voice": "ru-RU-DmitryNeural",
-        "rate": "+0%",
+        "rate": None,
         "eq_filter": "highpass=f=60,lowpass=f=12000"
     },
     "B": {
         "title": "Вариант B: Глубокий драматический нарратор",
-        "desc": "Замедленный на 5% темп, теплый глубокий тембр (интимный low-end +2.5dB на 120Hz), весомость и паузы",
+        "desc": "Замедленный темп (-5%), теплый глубокий тембр (+2.8dB на 120Hz), весомость и паузы",
         "voice": "ru-RU-DmitryNeural",
         "rate": "-5%",
         "eq_filter": "highpass=f=60,equalizer=f=120:width_type=o:width=1.2:g=2.8,equalizer=f=3500:width_type=o:width=1:g=-1.5,lowpass=f=11000"
     },
     "C": {
         "title": "Вариант C: Динамичный эксплейнер",
-        "desc": "Энергичная подача (+4% к темпу), четкий аналитический фокус на согласных (+2dB на 2.8kHz)",
+        "desc": "Энергичная подача (+4% к темпу), четкий аналитический фокус (+2.2dB на 2.8kHz)",
         "voice": "ru-RU-DmitryNeural",
         "rate": "+4%",
         "eq_filter": "highpass=f=75,equalizer=f=2800:width_type=o:width=1:g=2.2,lowpass=f=13000"
     }
 }
 
-async def generate_raw_tts(text: str, out_raw: str, voice: str, rate: str):
-    import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
-    await communicate.save(out_raw)
+def generate_raw_tts(text: str, out_raw: str, voice: str, rate: str | None):
+    edge_bin = "/opt/agent-bot/venv/bin/edge-tts"
+    if not os.path.exists(edge_bin):
+        edge_bin = "edge-tts"
+    
+    cmd = [edge_bin, "--text", text, "--write-media", out_raw, "--voice", voice]
+    if rate:
+        cmd.extend(["--rate", rate])
+    
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        raise RuntimeError(f"edge-tts failed: {res.stderr}")
 
 def master_audio(raw_path: str, norm_path: str, eq_filter: str):
     # Two-pass loudnorm to guarantee exact -16 LUFS and True Peak <= -1.5 dBTP
@@ -152,7 +159,7 @@ def main():
         raw_path = os.path.join(out_dir, f"voice_{opt_id}_raw.mp3")
         norm_path = os.path.join(out_dir, f"voice_audition_{opt_id}.mp3")
         
-        asyncio.run(generate_raw_tts(TEXT, raw_path, cfg["voice"], cfg["rate"]))
+        generate_raw_tts(TEXT, raw_path, cfg["voice"], cfg["rate"])
         stats = master_audio(raw_path, norm_path, cfg["eq_filter"])
         
         # probe duration
@@ -169,7 +176,7 @@ def main():
             "title": cfg["title"],
             "desc": cfg["desc"],
             "voice": cfg["voice"],
-            "rate": cfg["rate"],
+            "rate": cfg["rate"] or "+0%",
             "duration": round(duration, 2),
             "file": norm_path,
             "web_url": web_url,
