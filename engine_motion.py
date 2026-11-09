@@ -13,379 +13,644 @@ FONT_PATH_TITLE = "C:/Windows/Fonts/arialbd.ttf" if sys.platform == "win32" else
 FONT_PATH_TEXT = "C:/Windows/Fonts/arial.ttf" if sys.platform == "win32" else "/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Medium.ttf"
 
 try:
-    font_large = ImageFont.truetype(FONT_PATH_TITLE, 52)
-    font_sub = ImageFont.truetype(FONT_PATH_TITLE, 26)
-    font_meta = ImageFont.truetype(FONT_PATH_TEXT, 22)
-    font_small = ImageFont.truetype(FONT_PATH_TEXT, 18)
+    font_bold = ImageFont.truetype(FONT_PATH_TITLE, 32)
+    font_badge = ImageFont.truetype(FONT_PATH_TITLE, 20)
+    font_small = ImageFont.truetype(FONT_PATH_TEXT, 16)
 except Exception:
-    font_large = font_sub = font_meta = font_small = ImageFont.load_default()
+    font_bold = font_badge = font_small = ImageFont.load_default()
 
-def draw_person(draw, x, y, scale=1.0, walk_phase=0.0, color=(240, 245, 255), has_phone=True, phone_glow=(0, 240, 255)):
-    # Head
+
+# ==========================================
+# ADVANCED ARTICULATED CHARACTER RENDERER
+# ==========================================
+
+def draw_kinematic_human(draw, x, y, scale=1.0, walk_phase=0.0, 
+                         color=(240, 245, 255), hair_color=(45, 35, 30), 
+                         clothes_color=(59, 130, 246), action="walk_phone", facing=1):
+    """
+    Realistic vector human with articulated 2-segment limbs (thigh+shin, bicep+forearm),
+    torso, stylish clothing, hair, natural vertical bounce, and hand gestures.
+    """
+    bounce = math.sin(walk_phase * 2) * (3.5 * scale) if (walk_phase != 0 and action in ("walk", "walk_phone")) else 0
+    cur_y = y + bounce
+    
+    # Head & Hair
     head_r = int(14 * scale)
-    head_y = int(y - 120 * scale)
-    draw.ellipse([x - head_r, head_y - head_r, x + head_r, head_y + head_r], fill=color)
+    head_y = int(cur_y - 124 * scale)
+    head_x = int(x)
     
-    # Body
+    # Hair cap
+    draw.ellipse([head_x - int(head_r * 1.15), head_y - int(head_r * 1.15), 
+                  head_x + int(head_r * 1.15), head_y + int(head_r * 0.2)], fill=hair_color)
+    # Face / Head
+    draw.ellipse([head_x - head_r, head_y - head_r, head_x + head_r, head_y + head_r], fill=color)
+    
+    # Neck & Torso
     neck_y = head_y + head_r
-    pelvis_y = int(y - 55 * scale)
-    draw.line([x, neck_y, x, pelvis_y], fill=color, width=max(2, int(6 * scale)))
+    pelvis_y = int(cur_y - 56 * scale)
     
-    # Legs (walking cycle with sine/cosine)
-    leg_len = int(55 * scale)
-    leg1_angle = math.sin(walk_phase) * 0.45
-    leg2_angle = -math.sin(walk_phase) * 0.45
+    # Torso (Jacket/Hoodie)
+    draw.line([head_x, neck_y, head_x, pelvis_y], fill=clothes_color, width=max(4, int(12 * scale)))
+    draw.ellipse([head_x - int(6 * scale), pelvis_y - int(5 * scale), 
+                  head_x + int(6 * scale), pelvis_y + int(5 * scale)], fill=clothes_color)
     
-    k1_x = x + math.sin(leg1_angle) * (leg_len * 0.55)
-    k1_y = pelvis_y + math.cos(leg1_angle) * (leg_len * 0.55)
-    f1_x = k1_x + math.sin(leg1_angle * 0.8) * (leg_len * 0.45)
-    f1_y = k1_y + math.cos(leg1_angle * 0.8) * (leg_len * 0.45)
+    # Articulated Legs
+    thigh_len = 33 * scale
+    shin_len = 31 * scale
+    leg_w = max(2, int(6 * scale))
+    pants_col = (30, 41, 59)
+    shoe_col = (15, 23, 42)
     
-    k2_x = x + math.sin(leg2_angle) * (leg_len * 0.55)
-    k2_y = pelvis_y + math.cos(leg2_angle) * (leg_len * 0.55)
-    f2_x = k2_x + math.sin(leg2_angle * 0.8) * (leg_len * 0.45)
-    f2_y = k2_y + math.cos(leg2_angle * 0.8) * (leg_len * 0.45)
+    ang1 = math.sin(walk_phase) * 0.55 * facing if action.startswith("walk") else 0.08
+    ang2 = -math.sin(walk_phase) * 0.55 * facing if action.startswith("walk") else -0.08
     
-    draw.line([x, pelvis_y, k1_x, k1_y, f1_x, f1_y], fill=color, width=max(2, int(5 * scale)))
-    draw.line([x, pelvis_y, k2_x, k2_y, f2_x, f2_y], fill=color, width=max(2, int(5 * scale)))
+    # Leg 1
+    k1_x = head_x + math.sin(ang1) * thigh_len
+    k1_y = pelvis_y + math.cos(ang1) * thigh_len
+    bend1 = max(0.0, -math.sin(walk_phase)) * 0.45 * facing if action.startswith("walk") else 0
+    f1_x = k1_x + math.sin(ang1 + bend1) * shin_len
+    f1_y = k1_y + math.cos(ang1 + bend1) * shin_len
     
-    # Arms
-    shoulder_y = neck_y + int(10 * scale)
-    if has_phone:
-        # Left arm swings, right arm holds glowing phone
-        arm1_angle = -math.sin(walk_phase) * 0.4
-        a1_x = x + math.sin(arm1_angle) * (40 * scale)
-        a1_y = shoulder_y + math.cos(arm1_angle) * (40 * scale)
-        draw.line([x, shoulder_y, a1_x, a1_y], fill=color, width=max(2, int(4 * scale)))
+    draw.line([head_x - int(3 * scale), pelvis_y, k1_x, k1_y], fill=pants_col, width=leg_w)
+    draw.line([k1_x, k1_y, f1_x, f1_y], fill=pants_col, width=leg_w)
+    draw.line([f1_x, f1_y, f1_x + (9 * scale * facing), f1_y], fill=shoe_col, width=max(2, int(6 * scale)))
+    
+    # Leg 2
+    k2_x = head_x + math.sin(ang2) * thigh_len
+    k2_y = pelvis_y + math.cos(ang2) * thigh_len
+    bend2 = max(0.0, math.sin(walk_phase)) * 0.45 * facing if action.startswith("walk") else 0
+    f2_x = k2_x + math.sin(ang2 + bend2) * shin_len
+    f2_y = k2_y + math.cos(ang2 + bend2) * shin_len
+    
+    draw.line([head_x + int(3 * scale), pelvis_y, k2_x, k2_y], fill=pants_col, width=leg_w)
+    draw.line([k2_x, k2_y, f2_x, f2_y], fill=pants_col, width=leg_w)
+    draw.line([f2_x, f2_y, f2_x + (9 * scale * facing), f2_y], fill=shoe_col, width=max(2, int(6 * scale)))
+    
+    # Articulated Arms
+    shoulder_y = neck_y + int(8 * scale)
+    arm_len = 25 * scale
+    forearm_len = 24 * scale
+    arm_w = max(2, int(5 * scale))
+    
+    if action == "walk_phone":
+        # Back arm swings naturally
+        ang_a1 = -math.sin(walk_phase) * 0.45 * facing
+        e1_x = head_x + math.sin(ang_a1) * arm_len
+        e1_y = shoulder_y + math.cos(ang_a1) * arm_len
+        w1_x = e1_x + math.sin(ang_a1) * forearm_len
+        w1_y = e1_y + math.cos(ang_a1) * forearm_len
+        draw.line([head_x, shoulder_y, e1_x, e1_y], fill=clothes_color, width=arm_w)
+        draw.line([e1_x, e1_y, w1_x, w1_y], fill=clothes_color, width=arm_w)
         
-        # Phone arm (bent toward face)
-        elbow_x = x + int(16 * scale)
-        elbow_y = shoulder_y + int(22 * scale)
-        hand_x = x + int(24 * scale)
-        hand_y = shoulder_y + int(6 * scale)
-        draw.line([x, shoulder_y, elbow_x, elbow_y, hand_x, hand_y], fill=color, width=max(2, int(4 * scale)))
+        # Front arm holds glowing phone
+        e2_x = head_x + (16 * scale * facing)
+        e2_y = shoulder_y + (18 * scale)
+        w2_x = head_x + (25 * scale * facing)
+        w2_y = shoulder_y + (4 * scale)
+        draw.line([head_x, shoulder_y, e2_x, e2_y], fill=clothes_color, width=arm_w)
+        draw.line([e2_x, e2_y, w2_x, w2_y], fill=clothes_color, width=arm_w)
         
-        # Phone + screen glow
-        phone_w = int(7 * scale)
-        phone_h = int(12 * scale)
-        draw.rectangle([hand_x, hand_y - phone_h, hand_x + phone_w, hand_y], fill=(20, 20, 25))
-        draw.rectangle([hand_x + 1, hand_y - phone_h + 1, hand_x + phone_w - 1, hand_y - 1], fill=phone_glow)
+        # Smartphone
+        pw = int(6 * scale)
+        ph = int(12 * scale)
+        draw.rectangle([w2_x, w2_y - ph, w2_x + pw * facing, w2_y], fill=(15, 23, 42))
+        draw.rectangle([w2_x + 1, w2_y - ph + 1, w2_x + (pw - 1) * facing, w2_y - 1], fill=(0, 240, 255))
+        
+    elif action == "stand_hero":
+        # Father hero pose: confident posture with command device
+        e1_x = head_x - (18 * scale)
+        e1_y = shoulder_y + (16 * scale)
+        w1_x = head_x - (12 * scale)
+        w1_y = shoulder_y + (28 * scale)
+        draw.line([head_x, shoulder_y, e1_x, e1_y, w1_x, w1_y], fill=clothes_color, width=arm_w)
+        
+        e2_x = head_x + (20 * scale)
+        e2_y = shoulder_y + (14 * scale)
+        w2_x = head_x + (32 * scale)
+        w2_y = shoulder_y - (2 * scale)
+        draw.line([head_x, shoulder_y, e2_x, e2_y, w2_x, w2_y], fill=clothes_color, width=arm_w)
+        # Gold holographic tablet
+        draw.rectangle([w2_x - 4, w2_y - int(16 * scale), w2_x + int(24 * scale), w2_y + int(6 * scale)], 
+                       fill=(20, 25, 35), outline=(245, 158, 11), width=2)
+        draw.rectangle([w2_x - 2, w2_y - int(14 * scale), w2_x + int(22 * scale), w2_y + int(4 * scale)], 
+                       fill=(255, 215, 0))
+    elif action == "barber_master":
+        # Scissors arm moving up and down
+        trim_angle = math.sin(walk_phase * 4) * 0.25
+        e1_x = head_x - (14 * scale)
+        e1_y = shoulder_y + (18 * scale)
+        draw.line([head_x, shoulder_y, e1_x, e1_y], fill=clothes_color, width=arm_w)
+        
+        e2_x = head_x + (22 * scale)
+        e2_y = shoulder_y + (14 * scale)
+        w2_x = e2_x + math.cos(trim_angle) * (20 * scale)
+        w2_y = e2_y - math.sin(trim_angle) * (18 * scale)
+        draw.line([head_x, shoulder_y, e2_x, e2_y, w2_x, w2_y], fill=clothes_color, width=arm_w)
+        # Scissors glint
+        draw.ellipse([w2_x - 3, w2_y - 3, w2_x + 3, w2_y + 3], fill=(255, 215, 0))
     else:
-        # Both arms swing or gesture
-        arm1_angle = math.sin(walk_phase) * 0.5
-        arm2_angle = -math.sin(walk_phase) * 0.5
-        draw.line([x, shoulder_y, x + math.sin(arm1_angle) * 40 * scale, shoulder_y + math.cos(arm1_angle) * 40 * scale], fill=color, width=max(2, int(4 * scale)))
-        draw.line([x, shoulder_y, x + math.sin(arm2_angle) * 40 * scale, shoulder_y + math.cos(arm2_angle) * 40 * scale], fill=color, width=max(2, int(4 * scale)))
+        # Standard swing
+        ang_a1 = math.sin(walk_phase) * 0.45 * facing
+        ang_a2 = -math.sin(walk_phase) * 0.45 * facing
+        draw.line([head_x, shoulder_y, head_x + math.sin(ang_a1) * arm_len, shoulder_y + math.cos(ang_a1) * arm_len], fill=clothes_color, width=arm_w)
+        draw.line([head_x, shoulder_y, head_x + math.sin(ang_a2) * arm_len, shoulder_y + math.cos(ang_a2) * arm_len], fill=clothes_color, width=arm_w)
 
-def draw_hud(draw, scene_num, scene_title, scene_sub, current_time, total_time, accent_rgb):
-    # Top Bar
-    draw.rectangle([0, 0, WIDTH, 80], fill=(7, 10, 16))
-    draw.line([0, 80, WIDTH, 80], fill=accent_rgb, width=2)
+
+# ==========================================
+# VECTOR VEHICLE
+# ==========================================
+
+def draw_vector_car(draw, x, y, scale=1.0, color=(225, 29, 72), headlight_dir=1):
+    cw = int(140 * scale)
+    ch = int(42 * scale)
     
-    draw.text((60, 25), "KINETIC MOTION ENGINE // CLOUD AUTONOMOUS ANIMATION", fill=accent_rgb, font=font_meta)
+    body_poly = [
+        (x, y),
+        (x + int(20 * scale), y - int(18 * scale)),
+        (x + int(45 * scale), y - int(34 * scale)),
+        (x + int(105 * scale), y - int(34 * scale)),
+        (x + int(128 * scale), y - int(14 * scale)),
+        (x + cw, y),
+        (x + cw, y + int(14 * scale)),
+        (x, y + int(14 * scale))
+    ]
+    draw.polygon(body_poly, fill=color)
     
-    mins = int(current_time // 60)
-    secs = int(current_time % 60)
-    tmins = int(total_time // 60)
-    tsecs = int(total_time % 60)
-    tc_str = f"TIMECODE: {mins:02d}:{secs:02d} / {tmins:02d}:{tsecs:02d}"
-    draw.text((WIDTH - 360, 25), tc_str, fill=(160, 175, 200), font=font_meta)
+    # Windows
+    draw.polygon([
+        (x + int(46 * scale), y - int(30 * scale)),
+        (x + int(70 * scale), y - int(30 * scale)),
+        (x + int(70 * scale), y - int(16 * scale)),
+        (x + int(30 * scale), y - int(16 * scale))
+    ], fill=(15, 23, 42))
     
-    # Bottom HUD Bar
-    draw.rectangle([0, HEIGHT - 100, WIDTH, HEIGHT], fill=(7, 10, 16))
-    draw.line([0, HEIGHT - 100, WIDTH, HEIGHT - 100], fill=accent_rgb, width=2)
+    draw.polygon([
+        (x + int(74 * scale), y - int(30 * scale)),
+        (x + int(98 * scale), y - int(30 * scale)),
+        (x + int(114 * scale), y - int(16 * scale)),
+        (x + int(74 * scale), y - int(16 * scale))
+    ], fill=(15, 23, 42))
     
-    # Progress line
-    prog_w = int((current_time / max(1, total_time)) * (WIDTH - 120))
-    draw.rectangle([60, HEIGHT - 92, WIDTH - 60, HEIGHT - 88], fill=(30, 40, 60))
-    draw.rectangle([60, HEIGHT - 92, 60 + prog_w, HEIGHT - 88], fill=accent_rgb)
+    # Wheels
+    rw = int(11 * scale)
+    draw.ellipse([x + int(28 * scale) - rw, y + int(14 * scale) - rw, x + int(28 * scale) + rw, y + int(14 * scale) + rw], fill=(30, 41, 59), outline=(148, 163, 184), width=2)
+    draw.ellipse([x + int(112 * scale) - rw, y + int(14 * scale) - rw, x + int(112 * scale) + rw, y + int(14 * scale) + rw], fill=(30, 41, 59), outline=(148, 163, 184), width=2)
     
-    # Titles
-    draw.text((60, HEIGHT - 75), f"ГЛАВА {scene_num}: {scene_title}", fill=(255, 255, 255), font=font_sub)
-    draw.text((60, HEIGHT - 42), scene_sub, fill=accent_rgb, font=font_small)
-    
-    # Mini Equalizer (audio reactive simulation)
-    eq_x = WIDTH - 260
-    for b in range(16):
-        h_bar = max(4, int(14 + math.sin(current_time * 8 + b * 0.7) * 8 + math.cos(current_time * 14 - b) * 4))
-        draw.rectangle([eq_x + b * 11, HEIGHT - 35 - h_bar, eq_x + b * 11 + 6, HEIGHT - 35], fill=accent_rgb)
+    if headlight_dir > 0:
+        draw.ellipse([x + cw - int(8*scale), y - int(6*scale), x + cw, y + int(4*scale)], fill=(255, 240, 150))
+        # Warm headlight cone
+        draw.polygon([(x + cw, y), (x + cw + int(180 * scale), y - int(28 * scale)), 
+                      (x + cw + int(210 * scale), y + int(36 * scale)), (x + cw, y + int(10 * scale))], 
+                     fill=(255, 245, 180, 50))
+        draw.rectangle([x, y - int(4*scale), x + int(6*scale), y + int(4*scale)], fill=(239, 68, 68))
+    else:
+        draw.ellipse([x, y - int(6*scale), x + int(8*scale), y + int(4*scale)], fill=(255, 240, 150))
+        draw.polygon([(x, y), (x - int(180 * scale), y - int(28 * scale)), 
+                      (x - int(210 * scale), y + int(36 * scale)), (x, y + int(10 * scale))], 
+                     fill=(255, 245, 180, 50))
+        draw.rectangle([x + cw - int(6*scale), y - int(4*scale), x + cw, y + int(4*scale)], fill=(239, 68, 68))
+
+
+# ==========================================
+# SCENE 1: THE URBAN MATRIX (NO HUD, PURE CINEMATIC)
+# ==========================================
 
 def render_scene_1_frame(t, dur):
-    # Scene 1: Chaos & City (Homes, Buildings, Street, People walking with phones)
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (12, 14, 22))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (10, 13, 22))
     draw = ImageDraw.Draw(img)
     
-    cam_x = t * 45  # Camera pans right
+    # 1. Sky Gradient & Ambient Stars
+    for s in range(50):
+        sx = (s * 173) % WIDTH
+        sy = (s * 89) % 380
+        alpha = int(140 + math.sin(t * 3 + s) * 90)
+        draw.ellipse([sx, sy, sx + 2, sy + 2], fill=(200, 220, 255, alpha))
+        
+    cam_x = t * 50
     
-    # Far Skyline (dark buildings)
-    for bx in range(-400, WIDTH + 600, 140):
-        screen_bx = bx - int(cam_x * 0.3) % 800
-        b_h = 420 + (bx % 230)
-        draw.rectangle([screen_bx, HEIGHT - 100 - b_h, screen_bx + 110, HEIGHT - 100], fill=(18, 22, 34))
+    # 2. Distant Parallax Skyline
+    for b_idx in range(24):
+        bx = int((b_idx * 130 - cam_x * 0.25) % (WIDTH + 260)) - 130
+        bw = 110
+        bh = 380 + (b_idx * 47) % 240
+        draw.rectangle([bx, HEIGHT - 240 - bh, bx + bw, HEIGHT - 240], fill=(18, 24, 38))
+        # Subtle rooftop antenna
+        if b_idx % 3 == 0:
+            draw.line([bx + bw // 2, HEIGHT - 240 - bh, bx + bw // 2, HEIGHT - 240 - bh - 40], fill=(40, 60, 90), width=2)
+            if int(t * 2) % 2 == 0:
+                draw.ellipse([bx + bw // 2 - 3, HEIGHT - 240 - bh - 43, bx + bw // 2 + 3, HEIGHT - 240 - bh - 37], fill=(239, 68, 68))
+                
+    # 3. Mid-ground Detailed Buildings with Warm & Cyan Windows
+    for m_idx in range(16):
+        mx = int((m_idx * 210 - cam_x * 0.55) % (WIDTH + 420)) - 210
+        mw = 180
+        mh = 480 + (m_idx * 63) % 200
+        draw.rectangle([mx, HEIGHT - 200 - mh, mx + mw, HEIGHT - 200], fill=(25, 34, 52), outline=(38, 52, 78), width=2)
+        
+        # Windows grid
+        for wx in range(mx + 20, mx + mw - 25, 34):
+            for wy in range(HEIGHT - 180 - mh, HEIGHT - 220, 48):
+                is_lit = ((m_idx * 7 + (wx - mx) + wy) % 5 != 0)
+                win_col = (255, 215, 120, 220) if (wx + wy) % 3 != 0 else (0, 240, 255, 180)
+                if is_lit:
+                    draw.rectangle([wx, wy, wx + 18, wy + 26], fill=win_col)
+                else:
+                    draw.rectangle([wx, wy, wx + 18, wy + 26], fill=(16, 22, 34))
+                    
+    # 4. Street Infrastructure & Sidewalk
+    draw.rectangle([0, HEIGHT - 200, WIDTH, HEIGHT], fill=(14, 18, 26))
+    # Sidewalk paving
+    draw.rectangle([0, HEIGHT - 200, WIDTH, HEIGHT - 130], fill=(30, 41, 59))
+    draw.line([0, HEIGHT - 200, WIDTH, HEIGHT - 200], fill=(71, 85, 105), width=3)
+    draw.line([0, HEIGHT - 130, WIDTH, HEIGHT - 130], fill=(100, 116, 139), width=4)
     
-    # Midground Buildings (Homes & High-rises)
-    building_configs = [
-        (100, 560, 200, "#161b2b"), (340, 680, 240, "#1a2136"), (620, 500, 180, "#141926"),
-        (840, 740, 260, "#1c243a"), (1140, 590, 210, "#171e2e"), (1390, 650, 230, "#192238"),
-        (1660, 530, 190, "#151b2a"), (1890, 710, 250, "#1d263f"), (2180, 570, 220, "#171e2e")
+    # Street road markings
+    for lx in range(0, WIDTH + 120, 140):
+        cur_lx = int((lx - cam_x * 2.2) % (WIDTH + 140)) - 70
+        draw.rectangle([cur_lx, HEIGHT - 65, cur_lx + 80, HEIGHT - 55], fill=(245, 158, 11, 200))
+        
+    # Streetlamps casting soft gradient light cones
+    for lp in range(6):
+        lx = int((lp * 380 - cam_x * 0.9) % (WIDTH + 400)) - 100
+        draw.line([lx, HEIGHT - 200, lx, HEIGHT - 420], fill=(71, 85, 105), width=6)
+        draw.line([lx, HEIGHT - 420, lx + 45, HEIGHT - 420], fill=(71, 85, 105), width=5)
+        # Lamp head
+        draw.ellipse([lx + 40, HEIGHT - 425, lx + 55, HEIGHT - 415], fill=(255, 245, 180))
+        # Warm light cone on pavement
+        draw.polygon([(lx + 48, HEIGHT - 420), (lx - 70, HEIGHT - 130), (lx + 160, HEIGHT - 130)], fill=(255, 235, 150, 25))
+        
+    # 5. Moving Cars
+    car1_x = int((t * 360) % (WIDTH + 400)) - 200
+    draw_vector_car(draw, car1_x, HEIGHT - 110, scale=1.15, color=(225, 29, 72), headlight_dir=1)
+    
+    car2_x = int((WIDTH + 200 - t * 290) % (WIDTH + 400)) - 200
+    draw_vector_car(draw, car2_x, HEIGHT - 50, scale=1.0, color=(14, 165, 233), headlight_dir=-1)
+    
+    # 6. Diverse Articulated Pedestrians Walking
+    crowd_defs = [
+        {"base_x": 180, "spd": 85, "scale": 1.25, "dir": 1, "col": (245, 240, 230), "hair": (35, 25, 20), "jacket": (239, 68, 68)},
+        {"base_x": 580, "spd": 70, "scale": 1.15, "dir": 1, "col": (235, 245, 255), "hair": (80, 50, 30), "jacket": (16, 185, 129)},
+        {"base_x": 980, "spd": 95, "scale": 1.30, "dir": 1, "col": (255, 235, 220), "hair": (20, 20, 20), "jacket": (59, 130, 246)},
+        {"base_x": 1420, "spd": 75, "scale": 1.20, "dir": 1, "col": (240, 240, 250), "hair": (160, 80, 40), "jacket": (245, 158, 11)},
+        {"base_x": 1780, "spd": 80, "scale": 1.22, "dir": 1, "col": (245, 245, 245), "hair": (40, 30, 25), "jacket": (168, 85, 247)},
     ]
     
-    for (orig_bx, b_h, b_w, col) in building_configs:
-        bx = int(orig_bx - (cam_x * 0.75) % 2100)
-        top_y = HEIGHT - 100 - b_h
-        draw.rectangle([bx, top_y, bx + b_w, HEIGHT - 100], fill=col)
+    for cd in crowd_defs:
+        px = int((cd["base_x"] + t * cd["spd"] - cam_x * 0.8) % (WIDTH + 300)) - 150
+        w_phase = t * 6.5 + cd["base_x"]
+        draw_kinematic_human(
+            draw, px, HEIGHT - 150, scale=cd["scale"], 
+            walk_phase=w_phase, color=cd["col"], hair_color=cd["hair"], 
+            clothes_color=cd["jacket"], action="walk_phone", facing=cd["dir"]
+        )
+        # Pulsing notification badge floating above smartphone
+        badge_y = HEIGHT - 280 - int(math.sin(t * 5 + cd["base_x"]) * 10)
+        draw.ellipse([px + 20, badge_y, px + 36, badge_y + 16], fill=(239, 68, 68))
+        draw.text((px + 26, badge_y + 1), "!", fill=(255, 255, 255), font=font_small)
         
-        # Rooftop antenna with blinking red beacon
-        ant_x = bx + b_w // 2
-        draw.line([ant_x, top_y, ant_x, top_y - 45], fill=(80, 90, 110), width=2)
-        if int(t * 3) % 2 == 0:
-            draw.ellipse([ant_x - 4, top_y - 49, ant_x + 4, top_y - 41], fill=(255, 60, 60))
-            draw.arc([ant_x - 12, top_y - 57, ant_x + 12, top_y - 33], 0, 360, fill=(255, 80, 80))
-            
-        # Lighted windows grid
-        for wy in range(top_y + 35, HEIGHT - 120, 42):
-            for wx in range(bx + 20, bx + b_w - 25, 36):
-                win_hash = (wx * 17 + wy * 31) % 10
-                if win_hash < 4:
-                    win_color = (255, 230, 140) if win_hash < 3 else (0, 220, 255)
-                    draw.rectangle([wx, wy, wx + 18, wy + 24], fill=win_color)
-                else:
-                    draw.rectangle([wx, wy, wx + 18, wy + 24], fill=(30, 38, 55))
-                    
-    # Street pavement & sidewalk
-    draw.rectangle([0, HEIGHT - 160, WIDTH, HEIGHT - 100], fill=(25, 30, 45))
-    draw.line([0, HEIGHT - 160, WIDTH, HEIGHT - 160], fill=(60, 75, 105), width=3)
-    
-    # Streetlights
-    for lx in range(80, WIDTH + 400, 380):
-        sl_x = int(lx - (cam_x * 0.9) % 1200)
-        draw.line([sl_x, HEIGHT - 160, sl_x, HEIGHT - 330], fill=(90, 100, 120), width=4)
-        draw.line([sl_x, HEIGHT - 330, sl_x + 35, HEIGHT - 330], fill=(90, 100, 120), width=4)
-        draw.polygon([(sl_x + 35, HEIGHT - 330), (sl_x - 30, HEIGHT - 160), (sl_x + 100, HEIGHT - 160)], fill=(255, 240, 160, 35))
-        draw.ellipse([sl_x + 30, HEIGHT - 334, sl_x + 40, HEIGHT - 326], fill=(255, 255, 200))
-        
-    # Moving people (человечки) walking with smartphones
-    for p_idx in range(5):
-        base_px = 120 + p_idx * 340
-        person_x = int((base_px + t * (40 + p_idx * 15)) % (WIDTH + 200) - 100)
-        walk_phase = t * 6 + p_idx
-        draw_person(draw, person_x, HEIGHT - 158, scale=1.1, walk_phase=walk_phase, color=(240, 245, 255), has_phone=True, phone_glow=(255, 60, 60))
-        
-        # Flying red exclamation / notification badges over their heads (Chaos)
-        badge_y = int(HEIGHT - 310 - math.sin(t * 4 + p_idx) * 15)
-        draw.ellipse([person_x + 15, badge_y - 12, person_x + 39, badge_y + 12], fill=(255, 50, 75))
-        draw.text((person_x + 23, badge_y - 8), "!", fill=(255, 255, 255), font=font_small)
-
-    draw_hud(draw, 1, "ЦИФРОВОЙ ХАОС", "Бесконечный спам и перегрузка систем", t, dur, (255, 75, 100))
     return img
 
+
+# ==========================================
+# SCENE 2: HOLOGRAPHIC ARCHITECTURE (NO HUD)
+# ==========================================
+
 def render_scene_2_frame(t, dur):
-    # Scene 2: Antigravity Strategic Core (Holographic Lab & Architect)
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (8, 16, 28))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (6, 16, 28))
     draw = ImageDraw.Draw(img)
     
-    # 3D Grid Floor
-    vanish_x, vanish_y = WIDTH // 2, HEIGHT // 2 - 40
-    for gx in range(-600, WIDTH + 700, 100):
-        draw.line([gx, HEIGHT - 100, vanish_x + (gx - vanish_x) * 0.15, vanish_y + 160], fill=(20, 60, 90), width=1)
-    for gy in range(HEIGHT - 100, vanish_y + 160, -35):
-        draw.line([0, gy, WIDTH, gy], fill=(20, 60, 90), width=1)
+    # 1. Perspective Grid Floor
+    vp_x, vp_y = WIDTH // 2, 420
+    for grid_x in range(-WIDTH, WIDTH * 2, 120):
+        draw.line([vp_x, vp_y, grid_x, HEIGHT], fill=(0, 100, 180, 70), width=1)
+    for gy in range(HEIGHT - 400, HEIGHT, 45):
+        draw.line([0, gy, WIDTH, gy], fill=(0, 120, 200, 80), width=1)
         
-    # Holographic Architectural Matrix (Floating assembling blocks)
-    center_x = WIDTH // 2 + 180
-    center_y = HEIGHT // 2 - 50
-    rot = t * 0.8
+    # 2. Central 3D Rotating Hologram Sphere & Orbital Rings
+    cx, cy = WIDTH // 2 + 120, 380
+    rot = t * 1.8
+    
+    # Outer Ring
+    for deg in range(0, 360, 8):
+        rad = math.radians(deg + rot * 25)
+        rx = cx + math.cos(rad) * 340
+        ry = cy + math.sin(rad) * 110
+        draw.ellipse([rx - 3, ry - 3, rx + 3, ry + 3], fill=(0, 240, 255, 180))
+        
+    # Inner Tilted Ring
+    for deg in range(0, 360, 10):
+        rad = math.radians(deg - rot * 35)
+        rx = cx + math.cos(rad) * 260
+        ry = cy + math.sin(rad) * 170
+        draw.ellipse([rx - 4, ry - 4, rx + 4, ry + 4], fill=(16, 185, 129, 200))
+        
+    # Central Holographic Core
+    draw.ellipse([cx - 90, cy - 90, cx + 90, cy + 90], fill=(0, 60, 110, 140), outline=(0, 240, 255), width=3)
+    draw.ellipse([cx - 45, cy - 45, cx + 45, cy + 45], fill=(0, 240, 255, 220), outline=(255, 255, 255), width=2)
+    
+    # Connecting spline beams with dynamic data pulses
     nodes = []
-    for deg in range(0, 360, 60):
-        rad = math.radians(deg + rot * 40)
-        nx = center_x + math.cos(rad) * 180
-        ny = center_y + math.sin(rad) * 90
+    for i, a in enumerate([30, 90, 150, 210, 270, 330]):
+        ang = math.radians(a + rot * 20)
+        nx = cx + math.cos(ang) * 240
+        ny = cy + math.sin(ang) * 100
         nodes.append((nx, ny))
-        draw.ellipse([nx - 12, ny - 12, nx + 12, ny + 12], fill=(0, 240, 255))
-        draw.rectangle([nx - 20, ny - 20, nx + 20, ny + 20], outline=(0, 240, 255), width=2)
+        # Floating data node
+        draw.rectangle([nx - 22, ny - 16, nx + 22, ny + 16], fill=(10, 25, 45), outline=(0, 240, 255), width=2)
+        draw.ellipse([nx - 6, ny - 6, nx + 6, ny + 6], fill=(16, 185, 129))
+        draw.line([nx, ny, cx, cy], fill=(0, 240, 255, 110), width=2)
         
     for i in range(len(nodes)):
         nxt = nodes[(i + 1) % len(nodes)]
-        draw.line([nodes[i][0], nodes[i][1], nxt[0], nxt[1]], fill=(0, 200, 255), width=3)
-        draw.line([nodes[i][0], nodes[i][1], center_x, center_y], fill=(0, 240, 255, 120), width=2)
+        draw.line([nodes[i][0], nodes[i][1], nxt[0], nxt[1]], fill=(0, 200, 255, 180), width=2)
+        # Traveling pulse particle
+        pulse_pos = (t * 2 + i * 0.35) % 1.0
+        pp_x = nodes[i][0] + (nxt[0] - nodes[i][0]) * pulse_pos
+        pp_y = nodes[i][1] + (nxt[1] - nodes[i][1]) * pulse_pos
+        draw.ellipse([pp_x - 6, pp_y - 6, pp_x + 6, pp_y + 6], fill=(255, 255, 255))
         
-    draw.ellipse([center_x - 30, center_y - 30, center_x + 30, center_y + 30], fill=(0, 240, 255, 200), outline=(255, 255, 255), width=3)
+    # 3. Architect Figure at Command Deck
+    arch_x = WIDTH // 2 - 380
+    arch_y = HEIGHT - 180
+    draw_kinematic_human(
+        draw, arch_x, arch_y, scale=1.9, walk_phase=0,
+        color=(255, 245, 235), hair_color=(40, 30, 25), clothes_color=(30, 58, 138),
+        action="stand_hero", facing=1
+    )
     
-    # The Architect Character (standing in front of holographic console)
-    arch_x = WIDTH // 2 - 280
-    arch_y = HEIGHT - 220
-    draw_person(draw, arch_x, arch_y, scale=1.7, walk_phase=0, color=(240, 250, 255), has_phone=False)
-    
-    # Holographic terminal screen in front of Architect
-    term_x = arch_x + 60
-    term_y = arch_y - 180
-    draw.rectangle([term_x, term_y, term_x + 180, term_y + 110], fill=(0, 40, 70, 160), outline=(0, 240, 255), width=2)
-    for ly in range(term_y + 15, term_y + 95, 18):
-        l_len = int(60 + math.sin(t * 5 + ly) * 45)
-        draw.line([term_x + 15, ly, term_x + 15 + l_len, ly], fill=(0, 240, 255), width=2)
-        
-    draw_hud(draw, 2, "АРХИТЕКТУРА ANTIGRAVITY", "Стратегический мозг и нерушимый фундамент", t, dur, (0, 240, 255))
+    # Floating Holographic UI Arc in front of Architect
+    for ui_idx in range(3):
+        ux = arch_x + 90 + ui_idx * 95
+        uy = arch_y - 250 - ui_idx * 25
+        draw.rectangle([ux, uy, ux + 80, uy + 110], fill=(0, 35, 60, 160), outline=(0, 240, 255), width=2)
+        for ly in range(uy + 15, uy + 95, 16):
+            lw = int(35 + math.sin(t * 6 + ly + ui_idx) * 25)
+            draw.line([ux + 10, ly, ux + 10 + lw, ly], fill=(0, 240, 255), width=2)
+            
     return img
+
+
+# ==========================================
+# SCENE 3: AI PRECISION ROBOTICS (NO CODE BLOCKS!)
+# ==========================================
 
 def render_scene_3_frame(t, dur):
-    # Scene 3: Claude Precision Engineering (Laser Surgery & Code Perfection)
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (16, 8, 28))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (16, 7, 28))
     draw = ImageDraw.Draw(img)
     
-    # Holographic circuit lines on background
-    for y_line in range(120, HEIGHT - 140, 80):
-        draw.line([0, y_line, WIDTH, y_line], fill=(45, 20, 70), width=1)
+    # 1. Clean Isometric Circuit Grid
+    for y_line in range(60, HEIGHT, 70):
+        draw.line([0, y_line, WIDTH, y_line], fill=(42, 18, 70), width=1)
+    for x_line in range(60, WIDTH, 120):
+        draw.line([x_line, 0, x_line, HEIGHT], fill=(42, 18, 70), width=1)
         
-    # Precision Laser Beam scanning
-    laser_x = int((t * 180) % WIDTH)
-    draw.line([laser_x, 80, laser_x, HEIGHT - 100], fill=(220, 100, 255), width=4)
-    draw.line([laser_x - 8, 80, laser_x - 8, HEIGHT - 100], fill=(160, 50, 220, 80), width=12)
+    # 2. Central 3D Rotating Polyhedral Algorithm Core
+    cx, cy = WIDTH // 2 + 100, HEIGHT // 2 - 30
+    rot = t * 1.5
     
-    # Coder Character at curved workstation
-    coder_x = 420
-    coder_y = HEIGHT - 240
-    draw_person(draw, coder_x, coder_y, scale=1.6, walk_phase=0, color=(245, 235, 255), has_phone=False)
+    # Draw faceted crystal / algorithm core
+    facets = []
+    num_pts = 8
+    r_core = 160
+    for i in range(num_pts):
+        ang = math.radians(i * (360 / num_pts) + rot * 30)
+        px = cx + math.cos(ang) * r_core
+        py = cy + math.sin(ang) * (r_core * 0.55)
+        facets.append((px, py))
+        
+    # Draw geometric structure
+    for i in range(num_pts):
+        nxt = facets[(i + 1) % num_pts]
+        draw.polygon([(cx, cy - 140), facets[i], nxt], fill=(147, 51, 234, 90), outline=(216, 180, 254), width=2)
+        draw.polygon([(cx, cy + 140), facets[i], nxt], fill=(126, 34, 206, 110), outline=(192, 132, 252), width=2)
+        
+    # Glowing center core
+    draw.ellipse([cx - 40, cy - 40, cx + 40, cy + 40], fill=(255, 215, 0), outline=(255, 255, 255), width=3)
     
-    # Massive Ultra-wide Curved Screen
-    scr_x, scr_y, scr_w, scr_h = 560, 220, 950, 480
-    draw.rectangle([scr_x, scr_y, scr_x + scr_w, scr_y + scr_h], fill=(12, 10, 22, 220), outline=(180, 80, 255), width=3)
-    
-    # Clean Code Lines
-    code_lines = [
-        "export async function deployAutonomousFleet() {",
-        "  const kernel = await Antigravity.initCore();",
-        "  const claudePrecision = new PrecisionEngine({ zeroLag: true });",
-        "  await claudePrecision.neutralizeScanlines(); // CRT fixed",
-        "  await kernel.bindSystemdFleet(['barber', 'radar', 'hud']);",
-        "  return { status: 'ONLINE', freeDisk: '16GB', freeRAM: '3.5GB' };",
-        "}"
+    # 3. Precision Robotic Laser Arms
+    arms = [
+        {"root": (cx - 360, cy - 220), "col": (236, 72, 153)},
+        {"root": (cx + 360, cy - 220), "col": (59, 130, 246)},
+        {"root": (cx + 380, cy + 190), "col": (16, 185, 129)}
     ]
     
-    for i, line in enumerate(code_lines):
-        col = (255, 200, 100) if "export" in line else ((0, 240, 255) if "await" in line else (220, 225, 240))
-        draw.text((scr_x + 40, scr_y + 40 + i * 42), line, fill=col, font=font_sub)
+    for a_idx, arm in enumerate(arms):
+        rx, ry = arm["root"]
+        target_pt = facets[(int(t * 3 + a_idx * 3)) % num_pts]
         
-    # Spinning Golden Precision Gear
-    gx, gy = scr_x + scr_w - 120, scr_y + scr_h - 110
-    rot = t * 2.5
-    for a in range(0, 360, 45):
-        rad = math.radians(a + rot * 30)
-        draw.line([gx, gy, gx + math.cos(rad) * 45, gy + math.sin(rad) * 45], fill=(255, 190, 40), width=6)
-    draw.ellipse([gx - 28, gy - 28, gx + 28, gy + 28], fill=(255, 190, 40))
-    draw.ellipse([gx - 12, gy - 12, gx + 12, gy + 12], fill=(16, 8, 28))
+        # 2-segment articulated robotic arm
+        mid_x = (rx + target_pt[0]) // 2 + (40 if a_idx % 2 == 0 else -40)
+        mid_y = min(ry, target_pt[1]) - 60
+        
+        # Base mount
+        draw.rectangle([rx - 25, ry - 25, rx + 25, ry + 25], fill=(55, 65, 81), outline=(156, 163, 175), width=2)
+        # Joints & links
+        draw.line([rx, ry, mid_x, mid_y], fill=(107, 114, 128), width=10)
+        draw.ellipse([mid_x - 10, mid_y - 10, mid_x + 10, mid_y + 10], fill=(209, 213, 219))
+        draw.line([mid_x, mid_y, target_pt[0], target_pt[1]], fill=(156, 163, 175), width=7)
+        
+        # Precision laser beam firing from nozzle
+        draw.line([target_pt[0], target_pt[1], cx, cy], fill=arm["col"], width=4)
+        draw.line([target_pt[0], target_pt[1], cx, cy], fill=(255, 255, 255), width=1)
+        
+        # Flying welding sparks
+        for sp in range(6):
+            spark_ang = math.radians((sp * 60 + t * 400) % 360)
+            spark_dist = int((t * 120 + sp * 18) % 65)
+            sp_x = target_pt[0] + math.cos(spark_ang) * spark_dist
+            sp_y = target_pt[1] + math.sin(spark_ang) * spark_dist
+            draw.ellipse([sp_x - 2, sp_y - 2, sp_x + 2, sp_y + 2], fill=(255, 240, 160))
+            
+    # 4. Spinning Golden Precision Gears
+    gear_x, gear_y = 280, HEIGHT - 260
+    gear_r = 75
+    rot_g = t * 2.2
+    for tooth in range(0, 360, 30):
+        t_rad = math.radians(tooth + rot_g * 25)
+        tx = gear_x + math.cos(t_rad) * (gear_r + 14)
+        ty = gear_y + math.sin(t_rad) * (gear_r + 14)
+        draw.line([gear_x, gear_y, tx, ty], fill=(245, 158, 11), width=8)
+    draw.ellipse([gear_x - gear_r, gear_y - gear_r, gear_x + gear_r, gear_y + gear_r], fill=(245, 158, 11), outline=(255, 255, 255), width=3)
+    draw.ellipse([gear_x - 28, gear_y - 28, gear_x + 28, gear_y + 28], fill=(16, 7, 28))
     
-    draw_hud(draw, 3, "ХИРУРГИЯ КОДА CLAUDE", "Устранение багов, полировка и чистый глянец", t, dur, (180, 90, 255))
+    # 5. Coder/Engineer Inspector Character
+    draw_kinematic_human(
+        draw, 420, HEIGHT - 180, scale=1.75, walk_phase=0,
+        color=(255, 245, 235), hair_color=(30, 25, 20), clothes_color=(124, 58, 237),
+        action="stand_hero", facing=1
+    )
+    
     return img
+
+
+# ==========================================
+# SCENE 4: COMMERCIAL FLEET & BARBER LAB MONETIZATION
+# ==========================================
 
 def render_scene_4_frame(t, dur):
-    # Scene 4: Autonomous Fleet in Action (Barber Lab Shop, Radar Tower, Server Racks)
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (8, 24, 20))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (8, 20, 24))
     draw = ImageDraw.Draw(img)
     
-    # Ground
-    draw.rectangle([0, HEIGHT - 180, WIDTH, HEIGHT - 100], fill=(20, 35, 30))
-    draw.line([0, HEIGHT - 180, WIDTH, HEIGHT - 180], fill=(40, 80, 65), width=3)
+    # 1. Ground & Street Pavement
+    draw.rectangle([0, HEIGHT - 180, WIDTH, HEIGHT], fill=(15, 23, 42))
+    draw.line([0, HEIGHT - 180, WIDTH, HEIGHT - 180], fill=(45, 60, 80), width=4)
     
-    # 1. Barber Shop Building (Left)
-    shop_x, shop_y, shop_w, shop_h = 100, HEIGHT - 680, 520, 500
-    draw.rectangle([shop_x, shop_y, shop_x + shop_w, shop_y + shop_h], fill=(28, 42, 38), outline=(50, 180, 120), width=3)
+    # 2. BARBER LAB STOREFRONT (Commercial Showcase)
+    shop_x, shop_y, shop_w, shop_h = 120, HEIGHT - 720, 680, 540
+    # Store facade
+    draw.rectangle([shop_x, shop_y, shop_x + shop_w, shop_y + shop_h], fill=(24, 32, 42), outline=(50, 70, 95), width=3)
     
-    # Neon Sign
-    draw.rectangle([shop_x + 60, shop_y - 50, shop_x + shop_w - 60, shop_y], fill=(10, 20, 16), outline=(245, 158, 11), width=2)
-    draw.text((shop_x + 95, shop_y - 42), "💈 BARBER LAB TMA", fill=(245, 158, 11), font=font_sub)
+    # Glowing Neon Store Sign
+    sign_h = 80
+    draw.rectangle([shop_x + 40, shop_y - 45, shop_x + shop_w - 40, shop_y + sign_h - 45], 
+                   fill=(15, 23, 42), outline=(245, 158, 11), width=3)
+    # Animated neon text glow
+    neon_glow = (255, 215, 0) if int(t * 6) % 10 != 0 else (180, 130, 0)
+    draw.text((shop_x + 130, shop_y - 25), "💈 BARBER LAB TMA", fill=neon_glow, font=font_bold)
     
     # Rotating Barber Pole
-    pole_x = shop_x + shop_w - 35
-    draw.rectangle([pole_x, shop_y + 40, pole_x + 22, shop_y + 160], fill=(255, 255, 255), outline=(100, 100, 100), width=2)
-    for s in range(6):
-        stripe_y = shop_y + 40 + (int(t * 60 + s * 22) % 120)
-        draw.line([pole_x, stripe_y, pole_x + 22, stripe_y - 12], fill=(220, 40, 40), width=5)
+    pole_x = shop_x + shop_w - 55
+    pole_y = shop_y + 110
+    draw.rectangle([pole_x, pole_y, pole_x + 28, pole_y + 190], fill=(255, 255, 255), outline=(100, 116, 139), width=2)
+    # Spiraling red & blue stripes
+    for s in range(8):
+        sy = pole_y + (int(t * 80 + s * 26) % 170)
+        draw.line([pole_x, sy, pole_x + 28, sy - 14], fill=(225, 29, 72), width=6)
+        draw.line([pole_x, sy + 13, pole_x + 28, sy - 1], fill=(37, 99, 235), width=6)
         
-    # Large Glass Window with Master and Client
-    win_x, win_y, win_w, win_h = shop_x + 40, shop_y + 80, shop_w - 100, 300
-    draw.rectangle([win_x, win_y, win_x + win_w, win_y + win_h], fill=(15, 30, 26, 230), outline=(0, 240, 200), width=2)
+    # Large Glass Showroom Window (warm illuminated interior)
+    win_x, win_y, win_w, win_h = shop_x + 45, shop_y + 110, shop_w - 130, 360
+    draw.rectangle([win_x, win_y, win_x + win_w, win_y + win_h], fill=(35, 45, 38, 235), outline=(0, 240, 200), width=3)
+    # Interior ambient glow
+    draw.rectangle([win_x + 10, win_y + 10, win_x + win_w - 10, win_y + win_h - 10], fill=(255, 245, 220, 30))
     
-    # Client in barber chair
-    draw_person(draw, win_x + 130, win_y + win_h - 20, scale=1.2, walk_phase=0, color=(200, 230, 220), has_phone=False)
-    # Master cutting hair
-    draw_person(draw, win_x + 230, win_y + win_h - 20, scale=1.35, walk_phase=math.sin(t * 4) * 0.2, color=(255, 255, 255), has_phone=False)
-    # Scissors glow
-    draw.ellipse([win_x + 195, win_y + win_h - 130, win_x + 215, win_y + win_h - 110], fill=(255, 215, 0))
+    # Interior: Customer in Barber Chair
+    draw_kinematic_human(
+        draw, win_x + 160, win_y + win_h - 20, scale=1.35, walk_phase=0,
+        color=(255, 235, 220), hair_color=(35, 25, 20), clothes_color=(51, 65, 85),
+        action="stand_hero", facing=1
+    )
+    # Master Barber actively styling hair with animated hands
+    draw_kinematic_human(
+        draw, win_x + 270, win_y + win_h - 20, scale=1.45, walk_phase=t,
+        color=(255, 240, 230), hair_color=(120, 60, 25), clothes_color=(15, 23, 42),
+        action="barber_master", facing=-1
+    )
     
-    # 2. Server Cloud Rack (Center)
-    srv_x = 720
-    srv_y = HEIGHT - 640
-    draw.rectangle([srv_x, srv_y, srv_x + 360, srv_y + 460], fill=(12, 18, 22), outline=(0, 240, 255), width=2)
-    draw.text((srv_x + 45, srv_y + 20), "VPS 169.58.30.140", fill=(0, 240, 255), font=font_sub)
-    for rack in range(7):
-        ry = srv_y + 70 + rack * 52
-        draw.rectangle([srv_x + 20, ry, srv_x + 340, ry + 40], fill=(20, 28, 35))
-        for led in range(8):
-            led_col = (16, 185, 129) if (int(t * 10 + rack + led) % 3 != 0) else (0, 240, 255)
-            draw.ellipse([srv_x + 40 + led * 34, ry + 15, srv_x + 50 + led * 34, ry + 25], fill=led_col)
+    # 3. Modern Customer Entering the Shop
+    cust_x = int(shop_x - 120 + (t * 40) % 180)
+    draw_kinematic_human(
+        draw, cust_x, HEIGHT - 180, scale=1.4, walk_phase=t * 5.5,
+        color=(245, 240, 230), hair_color=(30, 30, 30), clothes_color=(234, 88, 12),
+        action="walk_phone", facing=1
+    )
+    
+    # 4. Autonomous Cloud Server Tower (Center-Right)
+    srv_x, srv_y, srv_w, srv_h = 880, HEIGHT - 700, 420, 520
+    draw.rectangle([srv_x, srv_y, srv_x + srv_w, srv_y + srv_h], fill=(12, 18, 26), outline=(0, 240, 255), width=2)
+    # Server bays
+    for rack in range(8):
+        ry = srv_y + 35 + rack * 58
+        draw.rectangle([srv_x + 25, ry, srv_x + srv_w - 25, ry + 44], fill=(20, 30, 42), outline=(35, 50, 70), width=1)
+        # Blinking activity LEDs
+        for led in range(10):
+            l_col = (16, 185, 129) if ((int(t * 12 + rack + led)) % 3 != 0) else (0, 240, 255)
+            draw.ellipse([srv_x + 50 + led * 34, ry + 16, srv_x + 62 + led * 34, ry + 28], fill=l_col)
             
-    # 3. Radar Tower (Right)
-    rad_x = 1450
-    rad_y = HEIGHT - 650
-    draw.line([rad_x - 60, HEIGHT - 180, rad_x, rad_y], fill=(80, 160, 120), width=4)
-    draw.line([rad_x + 60, HEIGHT - 180, rad_x, rad_y], fill=(80, 160, 120), width=4)
-    draw.line([rad_x - 35, HEIGHT - 320, rad_x + 35, HEIGHT - 320], fill=(80, 160, 120), width=3)
-    draw.line([rad_x - 20, HEIGHT - 450, rad_x + 20, HEIGHT - 450], fill=(80, 160, 120), width=3)
+    # 5. Resell Radar & Opportunity Scanner (Far Right)
+    rad_x, rad_y = 1560, HEIGHT - 640
+    # Radar Mast Structure
+    draw.line([rad_x - 70, HEIGHT - 180, rad_x, rad_y], fill=(71, 85, 105), width=4)
+    draw.line([rad_x + 70, HEIGHT - 180, rad_x, rad_y], fill=(71, 85, 105), width=4)
+    draw.line([rad_x - 45, HEIGHT - 330, rad_x + 45, HEIGHT - 330], fill=(71, 85, 105), width=3)
+    draw.line([rad_x - 25, HEIGHT - 480, rad_x + 25, HEIGHT - 480], fill=(71, 85, 105), width=3)
     
-    # Concentric Expanding Radar Waves
+    # Smooth Expanding Radar Cones
     for ring in range(3):
-        r_size = int((t * 90 + ring * 80) % 240)
-        draw.arc([rad_x - r_size, rad_y - r_size, rad_x + r_size, rad_y + r_size], 180, 360, fill=(16, 185, 129), width=3)
-    draw.ellipse([rad_x - 16, rad_y - 16, rad_x + 16, rad_y + 16], fill=(255, 255, 255))
-    draw.text((rad_x - 70, HEIGHT - 160), "RESELL RADAR", fill=(16, 185, 129), font=font_sub)
-
-    draw_hud(draw, 4, "БОЕВОЙ ФЛОТ НА VPS", "Barber Lab TMA, радары и службы 24/7", t, dur, (16, 185, 129))
+        r_dist = int((t * 110 + ring * 90) % 270)
+        draw.arc([rad_x - r_dist, rad_y - r_dist, rad_x + r_dist, rad_y + r_dist], 180, 360, fill=(16, 185, 129, max(0, 255 - r_dist)), width=3)
+    draw.ellipse([rad_x - 18, rad_y - 18, rad_x + 18, rad_y + 18], fill=(255, 255, 255))
+    
+    # 6. Stream of Golden Coins / Profit Floating into Digital Vault
+    for coin_idx in range(9):
+        c_prog = (t * 0.9 + coin_idx * 0.12) % 1.0
+        # Curved bezier trajectory from Barber Lab and Radar to Central Server
+        coin_x = int(shop_x + 350 + c_prog * 480)
+        coin_y = int(HEIGHT - 450 - math.sin(c_prog * math.pi) * 160)
+        draw.ellipse([coin_x - 14, coin_y - 14, coin_x + 14, coin_y + 14], fill=(245, 158, 11), outline=(255, 255, 255), width=2)
+        draw.text((coin_x - 5, coin_y - 8), "$", fill=(255, 255, 255), font=font_small)
+        
     return img
+
+
+# ==========================================
+# SCENE 5: THE IMPERIAL METROPOLIS (FATHER AT SUMMIT)
+# ==========================================
 
 def render_scene_5_frame(t, dur):
-    # Scene 5: The Master Command & Digital Empire (Father at panoramic rooftop)
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (22, 16, 8))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (24, 15, 10))
     draw = ImageDraw.Draw(img)
     
-    # Starfield & Deep Horizon
-    for s_idx in range(60):
-        sx = (s_idx * 137) % WIDTH
-        sy = (s_idx * 93) % (HEIGHT - 400)
-        s_bright = int(180 + math.sin(t * 3 + s_idx) * 75)
-        draw.ellipse([sx, sy, sx + 2, sy + 2], fill=(s_bright, s_bright, s_bright))
+    # 1. Sunset/Twilight Horizon & Starfield
+    for s in range(80):
+        sx = (s * 157) % WIDTH
+        sy = (s * 73) % 420
+        bright = int(170 + math.sin(t * 2.5 + s) * 85)
+        draw.ellipse([sx, sy, sx + 2, sy + 2], fill=(255, 235, 200, bright))
         
-    # Full Cybernetic City Skyline in the background below
-    for bx in range(0, WIDTH, 90):
-        b_h = 240 + (bx % 160)
-        draw.rectangle([bx, HEIGHT - 200 - b_h, bx + 75, HEIGHT - 200], fill=(35, 28, 16))
-        for wy in range(HEIGHT - 190 - b_h, HEIGHT - 210, 32):
-            draw.rectangle([bx + 15, wy, bx + 30, wy + 16], fill=(255, 180, 50, 160))
-            
-    # Observation Terrace (Foreground)
-    draw.rectangle([0, HEIGHT - 260, WIDTH, HEIGHT - 100], fill=(28, 22, 14))
-    draw.line([0, HEIGHT - 260, WIDTH, HEIGHT - 260], fill=(245, 158, 11), width=4)
-    # Glass railing
-    draw.rectangle([0, HEIGHT - 330, WIDTH, HEIGHT - 260], fill=(245, 158, 11, 25), outline=(245, 158, 11, 120), width=2)
+    # Horizon golden glow
+    for gy in range(260, 520, 20):
+        alpha = int(45 * (1.0 - (gy - 260) / 260.0))
+        draw.rectangle([0, gy, WIDTH, gy + 20], fill=(245, 158, 11, alpha))
+        
+    # 2. Epic Metropolis Skyline Below
+    for bx in range(0, WIDTH + 90, 85):
+        bh = 320 + (bx * 37) % 260
+        draw.rectangle([bx, HEIGHT - 220 - bh, bx + 70, HEIGHT - 220], fill=(32, 22, 16))
+        for wy in range(HEIGHT - 210 - bh, HEIGHT - 230, 36):
+            if (bx + wy) % 2 == 0:
+                draw.rectangle([bx + 14, wy, bx + 32, wy + 18], fill=(255, 195, 60, 190))
+                
+    # 3. High-altitude Penthouse Observation Terrace (Foreground)
+    deck_y = HEIGHT - 240
+    draw.rectangle([0, deck_y, WIDTH, HEIGHT], fill=(28, 20, 14))
+    draw.line([0, deck_y, WIDTH, deck_y], fill=(245, 158, 11), width=4)
+    # Sleek frameless glass railing with reflections
+    draw.rectangle([0, deck_y - 80, WIDTH, deck_y], fill=(245, 158, 11, 25), outline=(245, 158, 11, 140), width=2)
     
-    # Father Figure (standing majestically at center with glowing phone)
+    # 4. FATHER FIGURE (Majestic, Confident, Command Tablet)
     f_x = WIDTH // 2
-    f_y = HEIGHT - 260
-    draw_person(draw, f_x, f_y, scale=2.1, walk_phase=0, color=(255, 245, 220), has_phone=True, phone_glow=(255, 215, 0))
+    f_y = deck_y
+    draw_kinematic_human(
+        draw, f_x, f_y, scale=2.3, walk_phase=0,
+        color=(255, 245, 235), hair_color=(45, 30, 20), clothes_color=(180, 83, 9),
+        action="stand_hero", facing=1
+    )
     
-    # Energy rays streaming from city into Father's device
-    dev_x = f_x + 50
-    dev_y = f_y - 250
-    for ray_idx in range(6):
-        src_x = 100 + ray_idx * 320
-        src_y = HEIGHT - 220
-        draw.line([src_x, src_y, dev_x, dev_y], fill=(245, 158, 11, 140), width=2)
+    # 5. Beams of Golden Power & Client Data Connecting City to Father
+    tab_x = f_x + 75
+    tab_y = f_y - 270
+    for ray_idx in range(8):
+        rx = 120 + ray_idx * 240
+        ry = HEIGHT - 260
+        ray_alpha = int(140 + math.sin(t * 4 + ray_idx) * 90)
+        draw.line([rx, ry, tab_x, tab_y], fill=(245, 158, 11, ray_alpha), width=2)
         
-    # Expanding Golden Imperial Ring
-    pulse_r = int((t * 70) % 200) + 20
-    draw.ellipse([dev_x - pulse_r, dev_y - pulse_r, dev_x + pulse_r, dev_y + pulse_r], outline=(255, 215, 0, max(0, 255 - pulse_r)), width=3)
-    
-    draw_hud(draw, 5, "АБСОЛЮТНЫЙ РЕЗУЛЬТАТ", "Твоя цифровая империя: факты, скорость, порядок", t, dur, (245, 158, 11))
+    # Expanding Golden Radiance Rings
+    for ring in range(3):
+        r_rad = int((t * 85 + ring * 75) % 220) + 25
+        alpha_ring = max(0, int(255 * (1.0 - r_rad / 245.0)))
+        draw.ellipse([tab_x - r_rad, tab_y - r_rad, tab_x + r_rad, tab_y + r_rad], 
+                     outline=(255, 215, 0, alpha_ring), width=3)
+        
+    # Floating Golden Sparks Drifting Upwards
+    for sp in range(25):
+        sp_x = (sp * 83 + int(math.sin(t * 2 + sp) * 40)) % WIDTH
+        sp_y = int((HEIGHT - (t * 70 + sp * 35)) % HEIGHT)
+        draw.ellipse([sp_x, sp_y, sp_x + 3, sp_y + 3], fill=(255, 225, 120, 200))
+        
     return img
+
 
 SCENE_RENDERERS = [
     render_scene_1_frame,

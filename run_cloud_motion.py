@@ -25,7 +25,7 @@ def render_scene(scene_idx):
         "-s", f"{WIDTH}x{HEIGHT}", "-pix_fmt", "rgba", "-r", str(FPS),
         "-i", "-",
         "-i", audio_path,
-        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest",
         "-movflags", "+faststart",
@@ -91,14 +91,16 @@ def main():
     print("\nDispatching full motion video to Father Telegram...")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
     caption = (
-        "🎬 <b>НАСТОЯЩИЙ АНИМАЦИОННЫЙ РОЛИК (1080p, 30 FPS)</b>\n\n"
-        "⚡ <b>Сюжет: Эволюция Автономии</b>\n"
-        "🏙️ <b>Визуал:</b> Отрисованы живые человечки, улицы, городские дома, витрина Barber Lab, радарная вышка, серверные датацентры и пульт управления.\n\n"
+        "🎬 <b>КОММЕРЧЕСКИЙ АНИМАЦИОННЫЙ РОЛИК V2 (1080p, 30 FPS)</b>\n\n"
+        "✨ <b>ПРОФЕССИОНАЛЬНАЯ 2D-АНИМАЦИЯ ДЛЯ TIKTOK / REELS / YOUTUBE</b>\n"
+        "🚫 <b>Полная чистота:</b> удалены любые блоки кода, таймкоды и отвлекающие HUD-плашки.\n"
+        "🚶‍♂️ <b>Живая кинематика:</b> пошаговая анимация суставов человечков (шаг, колени, покачивание корпуса, жесты, смартфон с подсветкой).\n"
+        "🏙️ <b>Детализация:</b> ночной мегаполис, окна, фонари со световыми конусами, движущиеся авто с фарами, вращающийся Barber Pole, 3D-голографическое ядро, серверные стойки и радарная вышка.\n\n"
         f"⏱ <b>Хронометраж:</b> {int(final_dur//60)} мин {int(final_dur%60)} сек\n"
         "🎙 <b>Озвучка:</b> Svetlana Neural (студийное качество)\n"
         "🌐 <b>GitHub:</b> https://github.com/gewitter89/cloud-motion-studio\n"
-        "💻 <b>Смотреть в вебе:</b> https://signals-sacramento-enquiry-looks.trycloudflare.com/studio.html\n\n"
-        "<i>Сгенерировано полностью в облаке через Python + Pillow + FFmpeg без нагрузки на твой ПК.</i>"
+        "💻 <b>Смотреть онлайн:</b> https://signals-sacramento-enquiry-looks.trycloudflare.com/studio.html\n\n"
+        "<i>Смонтировано и отрендерено полностью в облаке Antigravity на VPS.</i>"
     )
     
     with open(final_video, "rb") as f:
