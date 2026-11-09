@@ -107,7 +107,7 @@ def draw_hud(draw, scene_num, scene_title, scene_sub, current_time, total_time, 
     # Mini Equalizer (audio reactive simulation)
     eq_x = WIDTH - 260
     for b in range(16):
-        h_bar = int(12 + math.sin(current_time * 8 + b * 0.7) * 10 + math.cos(current_time * 14 - b) * 6)
+        h_bar = max(4, int(14 + math.sin(current_time * 8 + b * 0.7) * 8 + math.cos(current_time * 14 - b) * 4))
         draw.rectangle([eq_x + b * 11, HEIGHT - 35 - h_bar, eq_x + b * 11 + 6, HEIGHT - 35], fill=accent_rgb)
 
 def render_scene_1_frame(t, dur):
