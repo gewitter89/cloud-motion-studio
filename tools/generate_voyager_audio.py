@@ -3,7 +3,7 @@
 generate_voyager_audio.py
 Synthesizes professional voiceover and multi-track cinematic soundscape
 for the 120-second documentary film: "VOYAGER: The Loneliest Artifact".
-Broadcast loudness: -14 LUFS.
+Includes robust retry loop and EBU R128 (-14 LUFS) mastering.
 """
 
 import os
@@ -25,46 +25,55 @@ VOICE_PATH = os.path.join(PROD_DIR, "voyager_voice_raw.mp3")
 MUSIC_WAV = os.path.join(PROD_DIR, "voyager_music_sfx.wav")
 MASTER_AUDIO = os.path.join(PROD_DIR, "voyager_master_audio.mp3")
 
-# Script timed for 120 seconds
 SCRIPT_SECTIONS = [
-    # Act 1: 00:00 - 00:30
     ("Двадцать четыре миллиарда километров от Земли. "
      "Там, где солнечный свет превращается в холодную тусклую точку, а температура падает до минус двухсот семидесяти градусов. "
      "Здесь нет ни звука, ни эха. Только ледяная бесконечная пустота. "
      "Но прямо сейчас, сквозь межзвёздную тьму, несётся одинокий кусок земного металла. Самый далёкий объект во Вселенной. "
      "Вояджер-один.", 0.0),
     
-    # Act 2: 00:30 - 01:00
     ("Когда его запускали в семьдесят седьмом, никто не знал, выживет ли человечество. "
      "Но на его борту закрепили золотую пластинку — послание неведомым мирам. "
      "Шум океанского прибоя, раскаты грома, смех ребёнка. Приветствия на пятидесяти пяти языках Земли и бессмертная музыка Баха. "
      "Мы отправили в бездну самое дорогое — свидетельство того, что мы умели любить и чувствовать.", 30.0),
      
-    # Act 3: 01:00 - 01:30
     ("Четырнадцатое февраля тысяча девятьсот девяностого года. "
      "По просьбе астронома Карла Сагана, Вояджер развернул свою камеру назад, к дому. "
      "И сделал последний снимок. "
      "Земля. Крошечная, едва различимая голубая пылинка, подвешенная в косом солнечном луче. "
      "Все наши войны, триумфы и трагедии — всё это происходило там. На одной песчинке посреди космического океана.", 60.0),
      
-    # Act 4: 01:30 - 02:00
     ("Сегодня его генераторы остывают. Приборы угасают один за другим. "
      "Но даже когда на Земле погаснут все города, а само Солнце станет белым карликом — Вояджер продолжит свой полёт. "
      "Его золотая пластинка будет дрейфовать сквозь звёзды миллиарды лет. "
      "Как вечное доказательство того, что в холодном океане Вселенной однажды были мы.", 90.0)
 ]
 
+async def synthesize_section_with_retry(text, part_path, max_retries=5):
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Clean em-dashes
+            clean_text = text.replace("—", "-")
+            comm = edge_tts.Communicate(clean_text, voice="ru-RU-DmitryNeural", rate="-3%", pitch="-2Hz")
+            await comm.save(part_path)
+            if os.path.exists(part_path) and os.path.getsize(part_path) > 1000:
+                print(f"      Saved {os.path.basename(part_path)} ({os.path.getsize(part_path)} bytes)")
+                return True
+        except Exception as e:
+            print(f"      Attempt {attempt} failed: {e}. Retrying in 2s...")
+            await asyncio.sleep(2.0)
+    raise RuntimeError(f"Failed to synthesize {part_path} after {max_retries} attempts.")
+
 async def synthesize_voice():
-    print("1. Synthesizing cinematic voiceover with DmitryNeural...")
+    print("1. Synthesizing cinematic voiceover with DmitryNeural (with auto-retry)...")
     temp_files = []
     for idx, (text, start_time) in enumerate(SCRIPT_SECTIONS):
         part_path = os.path.join(PROD_DIR, f"part_{idx}.mp3")
-        comm = edge_tts.Communicate(text, voice="ru-RU-DmitryNeural", rate="-3%", pitch="-2Hz")
-        await comm.save(part_path)
+        print(f"   Synthesizing Section {idx+1}/4 (target start t={start_time}s)...")
+        await synthesize_section_with_retry(text, part_path)
         temp_files.append((part_path, start_time))
-        print(f"   Synthesized Section {idx+1} (target t={start_time}s)")
+        await asyncio.sleep(1.0)
         
-    # Assemble into full 120s track with exact timed padding
     inputs = []
     filter_complex = []
     for idx, (fpath, start_time) in enumerate(temp_files):
@@ -88,49 +97,41 @@ def generate_cinematic_music_and_sfx():
     drone_f = 48.0 + 1.5 * np.sin(2 * np.pi * 0.05 * t)
     drone = 0.16 * np.sin(2 * np.pi * drone_f * t)
     drone += 0.08 * np.sin(2 * np.pi * drone_f * 1.5 * t)
-    # Slow dynamic pulse
     drone_env = 0.4 + 0.6 * np.clip(t / TOTAL_DURATION, 0, 1.0)
     drone = drone * drone_env
     
-    # Track 2: Interstellar wind / plasma rumble (lowpass filtered noise)
+    # Track 2: Interstellar wind / plasma rumble
     noise = np.random.normal(0, 0.05, n_samples)
     kernel_size = 120
     wind = np.convolve(noise, np.ones(kernel_size)/kernel_size, mode='same')
     wind = wind * (0.5 + 0.5 * np.sin(2 * np.pi * 0.08 * t))
     
-    # Track 3: Telemetry pulses / radio pulsars (periodic clicks like deep space probe)
+    # Track 3: Telemetry pulses / radio pulsars
     telemetry = np.zeros(n_samples)
-    click_interval = int(1.2 * SR) # every 1.2s
+    click_interval = int(1.2 * SR)
     click_decay = int(0.04 * SR)
     click_env = np.exp(-np.linspace(0, 5, click_decay))
     for c in range(10, n_samples - click_decay, click_interval):
-        # Sine blip at 1200 Hz
         blip = 0.06 * np.sin(2 * np.pi * 1200 * t[c:c+click_decay]) * click_env
         telemetry[c:c+click_decay] += blip
         
-    # Track 4: Golden Record Needle Crackle in Act 2 (t: 30s to 55s)
+    # Track 4: Golden Record Vinyl Needle Crackle (30s to 55s)
     vinyl_mask = np.exp(-((t - 42.5) / 12.0)**4)
     crackle_noise = np.random.choice([-1.0, 0.0, 1.0], size=n_samples, p=[0.02, 0.96, 0.02])
     vinyl_sfx = crackle_noise * vinyl_mask * 0.08
     
-    # Track 5: Orchestral emotional progression (C minor / Ab major chords)
-    # Chord 1: Cm (00-30s), Chord 2: Ab (30-60s), Chord 3: Eb/G (60-90s), Chord 4: Bb / Cm climax (90-120s)
+    # Track 5: Orchestral chords
     def chord_tone(freq, start, end):
         mask = np.clip((t - start) / 3.0, 0, 1.0) * np.clip((end - t) / 3.0, 0, 1.0)
         return 0.06 * (np.sin(2 * np.pi * freq * t) + 0.3 * np.sin(2 * np.pi * freq * 2 * t)) * mask
 
     music = np.zeros(n_samples)
-    # Section 1 (0-30s): C (130.8), Eb (155.6), G (196.0)
     music += chord_tone(130.81, 2, 30) + chord_tone(155.56, 4, 30) + chord_tone(196.00, 6, 30)
-    # Section 2 (30-60s): Ab (103.8), C (130.8), Eb (155.6)
     music += chord_tone(103.83, 30, 60) + chord_tone(130.81, 30, 60) + chord_tone(155.56, 32, 60)
-    # Section 3 (60-90s): Eb (155.6), G (196.0), Bb (233.1) - Pale Blue Dot
     music += chord_tone(155.56, 60, 90) + chord_tone(196.00, 60, 90) + chord_tone(233.08, 62, 90)
-    # Section 4 (90-120s): Climax & eternal fadeout
     climax_swell = np.clip((t - 90) / 10.0, 0, 1.0) * (0.8 + 0.2 * np.sin(2 * np.pi * 0.1 * t))
     music += (chord_tone(130.81, 90, 118) + chord_tone(196.00, 90, 118) + chord_tone(261.63, 92, 118)) * (1.0 + climax_swell)
     
-    # Master SFX mix
     total_mix = drone + wind + telemetry + vinyl_sfx + music
     total_mix = np.clip(total_mix, -0.85, 0.85)
     
