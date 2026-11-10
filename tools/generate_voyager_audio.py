@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 generate_voyager_audio.py
-Synthesizes professional voiceover and multi-track cinematic soundscape
-for the 120-second documentary film: "VOYAGER: The Loneliest Artifact".
-Includes robust retry loop and EBU R128 (-14 LUFS) mastering.
+Synthesizes professional cinematic voiceover (ru-RU-SvetlanaNeural)
+and multi-track cosmic sound design (120 seconds).
+Broadcast loudness: -14 LUFS (EBU R128).
 """
 
 import os
@@ -32,47 +32,34 @@ SCRIPT_SECTIONS = [
      "Но прямо сейчас, сквозь межзвёздную тьму, несётся одинокий кусок земного металла. Самый далёкий объект во Вселенной. "
      "Вояджер-один.", 0.0),
     
-    ("Когда его запускали в семьдесят седьмом, никто не знал, выживет ли человечество. "
-     "Но на его борту закрепили золотую пластинку — послание неведомым мирам. "
+    ("Когда его запускали в 1977 году, никто не знал, выживет ли человечество. "
+     "Но на его борту закрепили золотую пластинку - послание неведомым мирам. "
      "Шум океанского прибоя, раскаты грома, смех ребёнка. Приветствия на пятидесяти пяти языках Земли и бессмертная музыка Баха. "
-     "Мы отправили в бездну самое дорогое — свидетельство того, что мы умели любить и чувствовать.", 30.0),
+     "Мы отправили в бездну самое дорогое - свидетельство того, что мы умели любить и чувствовать.", 30.0),
      
-    ("Четырнадцатое февраля тысяча девятьсот девяностого года. "
+    ("14 февраля 1990 года. "
      "По просьбе астронома Карла Сагана, Вояджер развернул свою камеру назад, к дому. "
      "И сделал последний снимок. "
-     "Земля. Крошечная, едва различимая голубая пылинка, подвешенная в косом солнечном луче. "
-     "Все наши войны, триумфы и трагедии — всё это происходило там. На одной песчинке посреди космического океана.", 60.0),
+     "Земля. Крошечная, едва различимая голубая пылинка, подвешенная в солнечном луче. "
+     "Все наши войны, триумфы и трагедии - всё это происходило там. На одной песчинке посреди космического океана.", 60.0),
      
     ("Сегодня его генераторы остывают. Приборы угасают один за другим. "
-     "Но даже когда на Земле погаснут все города, а само Солнце станет белым карликом — Вояджер продолжит свой полёт. "
+     "Но даже когда на Земле погаснут все города, а само Солнце станет белым карликом - Вояджер продолжит свой полёт. "
      "Его золотая пластинка будет дрейфовать сквозь звёзды миллиарды лет. "
      "Как вечное доказательство того, что в холодном океане Вселенной однажды были мы.", 90.0)
 ]
 
-async def synthesize_section_with_retry(text, part_path, max_retries=5):
-    for attempt in range(1, max_retries + 1):
-        try:
-            # Clean em-dashes
-            clean_text = text.replace("—", "-")
-            comm = edge_tts.Communicate(clean_text, voice="ru-RU-DmitryNeural", rate="-3%", pitch="-2Hz")
-            await comm.save(part_path)
-            if os.path.exists(part_path) and os.path.getsize(part_path) > 1000:
-                print(f"      Saved {os.path.basename(part_path)} ({os.path.getsize(part_path)} bytes)")
-                return True
-        except Exception as e:
-            print(f"      Attempt {attempt} failed: {e}. Retrying in 2s...")
-            await asyncio.sleep(2.0)
-    raise RuntimeError(f"Failed to synthesize {part_path} after {max_retries} attempts.")
-
 async def synthesize_voice():
-    print("1. Synthesizing cinematic voiceover with DmitryNeural (with auto-retry)...")
+    print("1. Synthesizing cinematic voiceover with SvetlanaNeural (rate -4%)...")
     temp_files = []
     for idx, (text, start_time) in enumerate(SCRIPT_SECTIONS):
         part_path = os.path.join(PROD_DIR, f"part_{idx}.mp3")
         print(f"   Synthesizing Section {idx+1}/4 (target start t={start_time}s)...")
-        await synthesize_section_with_retry(text, part_path)
+        comm = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="-4%")
+        await comm.save(part_path)
+        print(f"      Saved part_{idx}.mp3 ({os.path.getsize(part_path)} bytes)")
         temp_files.append((part_path, start_time))
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.5)
         
     inputs = []
     filter_complex = []
