@@ -5,8 +5,8 @@ import time
 import httpx
 from engine_motion import SCENE_RENDERERS, WIDTH, HEIGHT, FPS
 
-BOT_TOKEN = "8976290222:AAGGiziDbhsKPbapeWLuSDBU7OCaDon0B9A"
-CHAT_ID = "8531839081"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 def render_scene(scene_idx):
     audio_path = f"/tmp/story_scenes/scene_{scene_idx}.mp3"
@@ -89,6 +89,9 @@ def main():
     
     # Send to Father Telegram
     print("\nDispatching full motion video to Father Telegram...")
+    if not BOT_TOKEN or not CHAT_ID:
+        print("Telegram не настроен: установите TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в переменных окружения; видео сохранено локально.")
+        return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
     caption = (
         "🎬 <b>КОММЕРЧЕСКИЙ АНИМАЦИОННЫЙ РОЛИК V2 (1080p, 30 FPS)</b>\n\n"
