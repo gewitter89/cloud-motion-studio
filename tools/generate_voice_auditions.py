@@ -112,9 +112,9 @@ def master_audio(src_path: str, norm_path: str, dsp_filter: str):
     return ver_stats
 
 def send_telegram_audio(filepath: str, title: str, caption: str):
-    bot_token = "8976290222:AAGGiziDbhsKPbapeWLuSDBU7OCaDon0B9A"
-    chat_id = "8531839081"
-    url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not bot_token or not chat_id:\n        print("Telegram не настроен; проба голоса сохранена локально.")\n        return\n    url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
     try:
         with open(filepath, "rb") as f:
             resp = httpx.post(
