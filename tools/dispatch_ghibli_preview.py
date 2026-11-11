@@ -2,13 +2,13 @@
 import os
 import httpx
 
-token = "8976290222:AAGGiziDbhsKPbapeWLuSDBU7OCaDon0B9A"
-chat_id = "8531839081"
+token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 
 photo_path = "production/scene2_ghibli_contact_sheet.jpg"
 video_path = "production/scene2_ghibli_preview.mp4"
 
-if os.path.exists(photo_path):
+if not token or not chat_id:\n    raise SystemExit("Telegram не настроен: используйте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID")\n\nif os.path.exists(photo_path):
     with open(photo_path, "rb") as f:
         r1 = httpx.post(
             f"https://api.telegram.org/bot{token}/sendPhoto",
