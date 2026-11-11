@@ -21,7 +21,7 @@ sys.path.append("/tmp")
 from render_full_film_4k import render_frame_4k, TOTAL_FRAMES, FRAMES_DIR, OUT_W, OUT_H, get_font_4k
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-FATHER_CHAT_ID = "0"
+FATHER_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 AUDIO_MASTER_PATH = "/tmp/full_narration_master.mp3"
 OUTPUT_VIDEO_PATH = "/tmp/film_nov9_freedom_final.mp4"
 CONTACT_SHEET_PATH = "/tmp/film_nov9_contact_sheet.jpg"
@@ -166,7 +166,7 @@ def deploy_to_web():
     print(f"Contact Sheet: {PUBLIC_BASE_URL}/film_nov9_contact_sheet.jpg")
 
 def dispatch_to_telegram():
-    if not TELEGRAM_BOT_TOKEN or not os.getenv("TELEGRAM_CHAT_ID"):
+    if not TELEGRAM_BOT_TOKEN or not FATHER_CHAT_ID:
         print("Telegram не настроен; файл MP4 остаётся сохранённым. Установите TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.")
         return
     print(f"\n==================================================")
