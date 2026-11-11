@@ -5,8 +5,8 @@ import time
 import httpx
 from engine_nov9 import SCENE_RENDERERS_NOV9, WIDTH, HEIGHT, FPS
 
-BOT_TOKEN = "8976290222:AAGGiziDbhsKPbapeWLuSDBU7OCaDon0B9A"
-CHAT_ID = "8531839081"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 AUDIO_DIR = "/tmp/story_scenes_nov9"
 OUT_SCENES_DIR = "/tmp/story_scenes_nov9_render"
 
@@ -105,6 +105,9 @@ def main():
     
     # Send to Father Telegram
     print("\nDispatching full motion video to Father Telegram...")
+    if not BOT_TOKEN or not CHAT_ID:
+        print("Telegram не настроен: установите TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в переменных окружения; видео сохранено локально.")
+        return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
     caption = (
         "🎬 <b>9 НОЯБРЯ: ДЕНЬ ПРОРЫВА (2-МИНУТНЫЙ АНИМАЦИОННЫЙ ФИЛЬМ)</b>\n\n"
