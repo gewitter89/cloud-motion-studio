@@ -6,7 +6,7 @@ End-to-End Orchestrator for 125s Master Video '9 Ноября — Эпоха С�
 2. High-Quality H.264 / AAC 1080p Encoding
 3. 16-Frame 4x4 Contact Sheet Generator
 4. Cloudflare Web Hosting Deployment (/opt/cyberdeck/public)
-5. Direct Telegram Dispatch to Father (Chat ID: 8531839081)
+5. Direct Telegram Dispatch to Father (Chat ID: 0)
 """
 
 import os
@@ -20,8 +20,8 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.append("/tmp")
 from render_full_film_4k import render_frame_4k, TOTAL_FRAMES, FRAMES_DIR, OUT_W, OUT_H, get_font_4k
 
-TELEGRAM_BOT_TOKEN = "8976290222:AAGGiziDbhsKPbapeWLuSDBU7OCaDon0B9A"
-FATHER_CHAT_ID = "8531839081"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+FATHER_CHAT_ID = "0"
 AUDIO_MASTER_PATH = "/tmp/full_narration_master.mp3"
 OUTPUT_VIDEO_PATH = "/tmp/film_nov9_freedom_final.mp4"
 CONTACT_SHEET_PATH = "/tmp/film_nov9_contact_sheet.jpg"
@@ -166,6 +166,9 @@ def deploy_to_web():
     print(f"Contact Sheet: {PUBLIC_BASE_URL}/film_nov9_contact_sheet.jpg")
 
 def dispatch_to_telegram():
+    if not TELEGRAM_BOT_TOKEN or not os.getenv("TELEGRAM_CHAT_ID"):
+        print("Telegram не настроен; файл MP4 остаётся сохранённым. Установите TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.")
+        return
     print(f"\n==================================================")
     print(f"STEP 5: DISPATCHING TO FATHER VIA TELEGRAM BOT")
     print(f"==================================================")
